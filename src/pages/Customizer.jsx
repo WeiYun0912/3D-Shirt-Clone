@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import config from "../config/config";
 import state from "../store";
-import { download } from "../assets";
-import { downloadCanvasToImage, reader } from "../config/helpers";
+import { reader } from "../config/helpers";
 import { EditorTabs, FilterTabs, DecalTypes } from "../config/constants";
 import { fadeAnimation, slideAnimation } from "../config/motion";
 import {
@@ -24,7 +23,10 @@ const Customizer = () => {
 
   const [generatingImg, setGeneratingImg] = useState(false);
 
-  const [activeEditorTab, setActiveEditorTab] = useState("");
+  const [activeEditorTab, setActiveEditorTab] = useState({
+    show: false,
+    tabName: "",
+  });
 
   const [activeFilterTab, setActiveFilterTab] = useState({
     logoShirt: true,
@@ -33,19 +35,25 @@ const Customizer = () => {
 
   //show tab content
   const generateTabContent = (tab) => {
-    switch (activeEditorTab) {
+    switch (activeEditorTab.tabName) {
       case "colorpicker":
-        return <ColorPicker />;
+        return activeEditorTab.show && <ColorPicker />;
       case "filepicker":
-        return <FilePicker file={file} setFile={setFile} readFile={readFile} />;
+        return (
+          activeEditorTab.show && (
+            <FilePicker file={file} setFile={setFile} readFile={readFile} />
+          )
+        );
       case "aipicker":
         return (
-          <AIPicker
-            prompt={prompt}
-            setPrompt={setPrompt}
-            generatingImg={generatingImg}
-            handleSubmit={handleSubmit}
-          />
+          activeEditorTab.show && (
+            <AIPicker
+              prompt={prompt}
+              setPrompt={setPrompt}
+              generatingImg={generatingImg}
+              handleSubmit={handleSubmit}
+            />
+          )
         );
       default:
         return null;
@@ -56,6 +64,21 @@ const Customizer = () => {
     if (!prompt) return alert("Please enter a prompt");
 
     try {
+      setGeneratingImg(true);
+
+      const response = await fetch(config.production.backendUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+        }),
+      });
+
+      const data = await response.json();
+
+      handelDecals(type, `data:image/png;base64,${data.photo}`);
     } catch (error) {
       alert(error.message);
     } finally {
@@ -81,9 +104,11 @@ const Customizer = () => {
         break;
       case "stylishShirt":
         state.isFullTexture = !activeFilterTab[tabName];
+        break;
       default:
         state.isLogoTexture = true;
         state.isFullTexture = false;
+        break;
     }
 
     // after setting state
@@ -99,7 +124,10 @@ const Customizer = () => {
   const readFile = (type) => {
     reader(file).then((result) => {
       handelDecals(type, result);
-      setActiveEditorTab("");
+      setActiveEditorTab({
+        show: false,
+        tabName: "",
+      });
     });
   };
 
@@ -118,7 +146,13 @@ const Customizer = () => {
                   <Tab
                     key={tab.name}
                     tab={tab}
-                    handleClick={() => setActiveEditorTab(tab.name)}
+                    handleClick={() => {
+                      // setShow((prev) => !prev);
+                      setActiveEditorTab((prev) => ({
+                        tabName: tab.name,
+                        show: !prev.show,
+                      }));
+                    }}
                   />
                 ))}
 
